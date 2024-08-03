@@ -2,8 +2,8 @@
 #define BLYNK_PRINT Serial
 
 /* Fill in information from Blynk Device Info here */
-#define BLYNK_TEMPLATE_ID "TMPL6cKNnoV5Q"
-#define BLYNK_TEMPLATE_NAME "IoT2"
+#define BLYNK_TEMPLATE_ID "TMPL6Lqh-szGW"
+#define BLYNK_TEMPLATE_NAME "Quickstart Template"
 #define BLYNK_AUTH_TOKEN "yYlGWVAa9WbJDC_elrd4AaINECZLmiBU"
 
 #include <ESP8266WiFi.h>
@@ -12,8 +12,13 @@
 
 // Your WiFi credentials.
 // Set password to "" for open networks.
-char ssid[] = "lina";
-char pass[] = "B4tam2022#";
+// char ssid[] = "lina";
+// char pass[] = "B4tam2022#";
+
+// // Your WiFi credentials.
+// // Set password to "" for open networks.
+char ssid[] = "S.sirait";
+char pass[] = "Ani12345";
 
 // Set up LCD display
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -22,18 +27,14 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 const int navigationButtonPin = D7;  // Button 1 for menu navigation
 const int testButtonPin = D8;        // Button 2 for manual test and reset alarm
 
-// Set up buzzer
-const int buzzerPin = D3;
+const int buzzerPin = D4;
 
 // Set up LEDs
-const int ledBluePin = D4;    // Blue LED for system ready and alarm
-const int ledGreenPin = D5;   // Green LED for low noise
-const int ledYellowPin = D6;  // Yellow LED for mid noise
-const int ledRedPin = D0;     // Red LED for high noise and trigger alarm
+const int LOW_NOISE_LED = D3;       // Green LED for low noise
+const int MID_HIGH_NOISE_LED = D0;  // Red LED for high noise and trigger alarm
 
-// const int playPin = MOSI;
-// const int pin_a_mux = 10;
-// const int pin_b_mux = 9;
+const int pin_a_mux = D5;
+const int pin_b_mux = D6;
 
 // Set up voice sensor
 const int voiceSensorPin = A0;
@@ -44,22 +45,23 @@ const char* menuItems[] = {
   "Melihat Nilai ADC",
   "Melihat Nilai Voltage",
   "Melihat dB/Desible",
-  "Menihat IP Address",
   "Melihat Kekuatan Signal Wifi",
   "Melihat Status wifi Connection",
   "Melihat Nama Wifi Ssid Dan Passwordnya",
-  "Melihat Status System ON/OFF",
   "Melihat Status Alarm",
   "Menampilkan Notif Alarm",
-  "DII"
 };
 
 const int sampleWindow = 50;  // Sample window width in mS (50 mS = 20Hz)
 unsigned int sample;
-char buff_[16];
 int db;
+
+char buff_[16];
+
 uint8_t logicMux = 0;
+
 uint16_t ADC_VAL = 0;
+
 const char* BUZZER_STATUS = "";
 
 enum MenuState {
@@ -71,10 +73,7 @@ enum MenuState {
   MENU_WIFI_SIGNAL_STRENGTH,    //
   MENU_WIFI_CONNECTION_STATUS,  //
   MENU_WIFI_PASSWORD,           //
-  MENU_SYSTEM_STATUS,
   MENU_ALARM_STATUS,            //
-  MENU_ALARM_NOTIFICATION,
-  MENU_DII
 };
 
 MenuState currentMenu = MENU_MAIN;
@@ -94,18 +93,14 @@ void setup() {
   digitalWrite(navigationButtonPin, LOW);
   digitalWrite(testButtonPin, LOW);
 
-  // Initialize buzzer
+  // Initialize LEDs
+  pinMode(LOW_NOISE_LED, OUTPUT);
+  pinMode(MID_HIGH_NOISE_LED, OUTPUT);
+
   pinMode(buzzerPin, OUTPUT);
 
-  // Initialize LEDs
-  pinMode(ledBluePin, OUTPUT);
-  pinMode(ledGreenPin, OUTPUT);
-  pinMode(ledYellowPin, OUTPUT);
-  pinMode(ledRedPin, OUTPUT);
-
-  // pinMode(playPin, OUTPUT);
-  // pinMode(pin_a_mux, OUTPUT);
-  // pinMode(pin_b_mux, OUTPUT);
+  pinMode(pin_a_mux, OUTPUT);
+  pinMode(pin_b_mux, OUTPUT);
 
   // Initialize voice sensor
   pinMode(voiceSensorPin, INPUT);
@@ -114,13 +109,22 @@ void setup() {
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Serial.println("Connecting to WiFi...");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Wifi Status");
+    lcd.setCursor(0, 1);
+    lcd.print("Connecting.....");
   }
-  Serial.println("Connected to WiFi");
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Wifi Status");
+  lcd.setCursor(0, 1);
+  lcd.print("Connected");
+  delay(1000);
 
   // Initialize the Blynk connection
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-
   lcd.clear();
 
   lcd.setCursor(2, 0);
@@ -145,47 +149,48 @@ void loop() {
     desible_read();
     case_menu();
     monitoring();
+    Serial.printf("Desible val: %d\r\n",db);
+        // Update LEDs based on voice sensor value
+    if (db < 60) {
+      // Serial.println("Desible level Normal");
+      digitalWrite(LOW_NOISE_LED, HIGH);
+
+      analogWrite(MID_HIGH_NOISE_LED, 0);
+      analogWrite(buzzerPin, 0);
+      BUZZER_STATUS = "OFF";
+    } else if (db >= 60 && db <= 80) {
+      // Serial.println("Desible level Medium");
+      digitalWrite(LOW_NOISE_LED, LOW);
+
+      analogWrite(MID_HIGH_NOISE_LED, 30);
+      analogWrite(buzzerPin, 100);
+      BUZZER_STATUS = "ON";
+      // digitalWrite(playPin, LOW);
+    } else {
+      // Serial.println("Desible level HIGH");
+      digitalWrite(LOW_NOISE_LED, LOW);
+
+      analogWrite(MID_HIGH_NOISE_LED, 255);
+      analogWrite(buzzerPin, 255);
+      BUZZER_STATUS = "ON";
+    }
   }
 
   if (millis() - prev_millis_send_to_blynk > 1000) {
 
     prev_millis_send_to_blynk = millis();
-    // Serial.printf("Wifi connection: %d\r\n", WiFi.RSSI());
 
-    // logicMux++;
-    // if (logicMux == 1) logicMux_sound(LOW, LOW);
-    // else if (logicMux == 2) logicMux_sound(LOW, HIGH);
-    // else if (logicMux == 3) logicMux_sound(HIGH, LOW);
-    // else if (logicMux == 4) {
-    //   logicMux_sound(HIGH, HIGH);
-    //   logicMux = 0;
-    // }
+    logicMux++;
+
+    if (logicMux == 1) logicMux_sound(LOW, LOW);
+    else if (logicMux == 2) logicMux_sound(LOW, HIGH);
+    else if (logicMux == 3) logicMux_sound(HIGH, LOW);
+    else if (logicMux == 4) {
+      logicMux_sound(HIGH, HIGH);
+      logicMux = 0;
+    }
 
     send_data_to_blynk();
-    // Update LEDs based on voice sensor value
-    if (db < 60) {
-      Serial.println("Desible level Normal");
-      digitalWrite(ledGreenPin, HIGH);
-      digitalWrite(ledYellowPin, LOW);
-      digitalWrite(ledRedPin, LOW);
-      BUZZER_STATUS = "OFF";
-      // digitalWrite(playPin, LOW);
-    } else if (db >= 60 && db <= 80) {
-      Serial.println("Desible level Medium");
-      digitalWrite(ledGreenPin, LOW);
-      digitalWrite(ledYellowPin, HIGH);
-      digitalWrite(ledRedPin, LOW);
-      BUZZER_STATUS = "OFF";
-      // digitalWrite(playPin, LOW);
-    } else {
-      Serial.println("Desible level HIGH");
-      digitalWrite(ledGreenPin, LOW);
-      digitalWrite(ledYellowPin, LOW);
-      digitalWrite(ledRedPin, HIGH);
-      digitalWrite(buzzerPin, HIGH);
-      BUZZER_STATUS = "ON";
-      // digitalWrite(playPin, HIGH);
-    }
   }
 }
 
@@ -224,10 +229,10 @@ void monitoring() {
   }
   if (digitalRead(testButtonPin) == HIGH) {
     // Manual test and reset alarm
-    digitalWrite(buzzerPin, HIGH);
+    analogWrite(buzzerPin, 255);
     BUZZER_STATUS = "ON";
     delay(1000);
-    digitalWrite(buzzerPin, LOW);
+    analogWrite(buzzerPin, 0);
     BUZZER_STATUS = "OFF";
   }
 }
@@ -248,6 +253,18 @@ void send_data_to_blynk() {
 
 void case_menu() {
   switch (currentMenu) {
+
+    case MENU_DESIBLE:
+      lcd.clear();
+
+      sprintf(buff_, "Value: %d db", db);
+
+      lcd.setCursor(0, 0);
+      lcd.print("DESIBLE VALUE");
+      lcd.setCursor(0, 1);
+      lcd.print(buff_);
+      break;
+
     case MENU_ALARM_STATUS:
       lcd.clear();
 
@@ -275,17 +292,6 @@ void case_menu() {
 
       lcd.setCursor(0, 0);
       lcd.print("ADC VALUE");
-      lcd.setCursor(0, 1);
-      lcd.print(buff_);
-      break;
-
-    case MENU_DESIBLE:
-      lcd.clear();
-
-      sprintf(buff_, "Value: %d db", db);
-
-      lcd.setCursor(0, 0);
-      lcd.print("DESIBLE VALUE");
       lcd.setCursor(0, 1);
       lcd.print(buff_);
       break;
@@ -337,7 +343,7 @@ void case_menu() {
   }
 }
 
-// void logicMux_sound(uint8_t logic_pin_a_mux, uint8_t logic_pin_b_mux) {
-//   digitalWrite(pin_a_mux, logic_pin_a_mux);
-//   digitalWrite(pin_b_mux, logic_pin_b_mux);
-// }
+void logicMux_sound(uint8_t logic_pin_a_mux, uint8_t logic_pin_b_mux) {
+  digitalWrite(pin_a_mux, logic_pin_a_mux);
+  digitalWrite(pin_b_mux, logic_pin_b_mux);
+}
